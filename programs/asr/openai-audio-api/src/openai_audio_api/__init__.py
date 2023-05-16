@@ -1,0 +1,1 @@
+from openai_audio_api.transcribe import AudioModel
