@@ -102,9 +102,11 @@ See `servers` section of `configuration.yaml` file.
     * [whisper](https://github.com/openai/whisper)
     * [whisper-cpp](https://github.com/ggerganov/whisper.cpp/)
     * [faster-whisper](https://github.com/guillaumekln/faster-whisper/)
+    * [openai-audio-api](https://github.com/openai/openai-python)
     * [vosk](https://alphacephei.com/vosk/)
     * [coqui-stt](https://stt.readthedocs.io)
     * [pocketsphinx](https://github.com/cmusphinx/pocketsphinx)
+    * [openai-audio-api](https://github.com/openai/openai-python)
 * handle
     * [home_assistant_conversation](https://www.home-assistant.io/docs/assist)
 * tts 

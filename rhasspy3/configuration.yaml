@@ -218,6 +218,24 @@ programs:
       command: |
         client_unix_socket.py var/run/faster-whisper.socket
 
+    # https://github.com/openai/openai-python
+    # Models: https://platform.openai.com/docs/models/whisper
+    # (asr_openai-audio-api-*)
+    openai-audio-api:
+      command: |
+        script/wav2text --language ${language} "${api_key}" "${model}" "{wav_file}"
+      adapter: |
+        asr_adapter_wav2text.py
+      template_args:
+        api_key: "YOUR_API_KEY"
+        model: "whisper-1"
+        language: "en"
+
+    # Run server: asr openai-audio-api
+    openai-audio-api.client:
+      command: |
+        client_unix_socket.py var/run/openai-audio-api.socket
+
 
   # --------------
   # Text to speech
@@ -490,6 +508,14 @@ servers:
         language: "en"
         model: "${data_dir}/tiny-int8"
         device: "cpu"  # or cuda
+
+    openai-audio-api:
+      command: |
+        script/server --language ${language} "${api_key}" "${model}"
+      template_args:
+        api_key: "YOUR_API_KEY"
+        language: "en"
+        model: "whisper-1"
 
   tts:
     mimic3:
