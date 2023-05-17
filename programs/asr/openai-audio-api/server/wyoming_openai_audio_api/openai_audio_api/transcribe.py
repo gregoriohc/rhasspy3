@@ -1,5 +1,8 @@
 import collections
+import datetime
 from enum import Enum
+import os
+import wave
 import openai
 
 
@@ -55,9 +58,14 @@ class AudioModel:
             - a generator over transcribed segments
             - an instance of AudioInfo
         """
-        with open('myfile.wav', mode='bx') as f:
-            f.write(audio_bytes)
-        f = open('myfile.wav', "rb")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"audio_{timestamp}.wav"
+        with wave.open(filename, 'wb') as wave_file:
+            wave_file.setnchannels(1)
+            wave_file.setsampwidth(2)
+            wave_file.setframerate(16000)
+            wave_file.writeframes(audio_bytes)
+        f = open(filename, "rb")
 
         params = {
             "temperature": temperature,
@@ -67,6 +75,7 @@ class AudioModel:
             params["language"] = language
         
         transcript = openai.Audio.transcribe(self.model_name, f, **params)
+        os.remove(filename)
 
         segments = self.generate_segments(transcript.segments)
 
@@ -83,4 +92,3 @@ class AudioModel:
                 end=segment.end,
                 text=segment.text,
             )
-
