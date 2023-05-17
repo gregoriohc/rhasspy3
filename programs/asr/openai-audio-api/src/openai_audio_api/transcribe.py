@@ -18,6 +18,12 @@ class AudioModel:
         model_name,
         api_key,
     ):
+        """Initializes the Audio model.
+
+        Args:
+          model_name: OpenAI audio model name.
+          api_key: OpenAI API Key.
+        """
         self.model_name = model_name
         openai.api_key = api_key
 

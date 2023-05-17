@@ -17,4 +17,4 @@ fi
 socket_dir="${base_dir}/var/run"
 mkdir -p "${socket_dir}"
 
-python3 "${base_dir}/bin/openai_audio_api_server.py" --socketfile "${socket_dir}/openai-audio-api.socket" "$@"
+python3 "${base_dir}/bin/openai_audio_api_server.py" --uri "unix://${socket_dir}/openai-audio-api.socket" "$@"
