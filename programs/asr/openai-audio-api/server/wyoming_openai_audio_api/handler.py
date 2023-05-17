@@ -57,7 +57,6 @@ class OpenAIAudioAPIEventHandler(AsyncEventHandler):
             _LOGGER.debug("Audio stopped")
             segments, _info = self.model.transcribe(
                 self.audio,
-                beam_size=self.cli_args.beam_size,
                 language=self.cli_args.language,
             )
 
