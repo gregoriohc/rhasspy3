@@ -48,7 +48,7 @@ def main() -> None:
 
         # Load OpenAI audio model
         model = AudioModel(
-            args.model, device=args.device, compute_type=args.compute_type
+            args.model, api_key=args.api_key
         )
         _LOGGER.info("Ready")
 
@@ -87,7 +87,6 @@ def main() -> None:
                     wav_io.seek(0)
                     segments, _info = model.transcribe(
                         wav_io,
-                        beam_size=args.beam_size,
                         language=args.language,
                     )
                     text = " ".join(segment.text for segment in segments)
