@@ -23,7 +23,7 @@ async def main() -> None:
     parser.add_argument(
         "--model",
         required=True,
-        choices=list(FasterWhisperModel),
+        choices=list(v.value for v in FasterWhisperModel),
         help="Name of faster-whisper model to use",
     )
     parser.add_argument("--uri", required=True, help="unix:// or tcp://")
@@ -35,8 +35,7 @@ async def main() -> None:
     )
     parser.add_argument(
         "--download-dir",
-        required=True,
-        help="Directory to download models into",
+        help="Directory to download models into (default: first data dir)",
     )
     parser.add_argument(
         "--device",
@@ -45,7 +44,7 @@ async def main() -> None:
     )
     parser.add_argument(
         "--language",
-        help="Language to set for transcription",
+        help="Default language to set for transcription",
     )
     parser.add_argument(
         "--compute-type",
@@ -59,6 +58,10 @@ async def main() -> None:
     )
     parser.add_argument("--debug", action="store_true", help="Log DEBUG messages")
     args = parser.parse_args()
+
+    if not args.download_dir:
+        # Download to first data dir by default
+        args.download_dir = args.data_dir[0]
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
@@ -74,12 +77,7 @@ async def main() -> None:
         _LOGGER.info("Downloading %s to %s", model, args.download_dir)
         model_dir = download_model(model, args.download_dir)
 
-    if args.language and (args.language != "auto"):
-        _LOGGER.debug("Language: %s", args.language)
-        languages = [args.language]
-    else:
-        languages = WHISPER_LANGUAGES
-
+    if args.language == "auto":
         # Whisper does not understand "auto"
         args.language = None
 
@@ -87,6 +85,7 @@ async def main() -> None:
         asr=[
             AsrProgram(
                 name="faster-whisper",
+                description="Faster Whisper transcription with CTranslate2",
                 attribution=Attribution(
                     name="Guillaume Klein",
                     url="https://github.com/guillaumekln/faster-whisper/",
@@ -95,12 +94,13 @@ async def main() -> None:
                 models=[
                     AsrModel(
                         name=model.value,
+                        description=model.value,
                         attribution=Attribution(
                             name="rhasspy",
                             url="https://github.com/rhasspy/models/",
                         ),
                         installed=True,
-                        languages=languages,
+                        languages=WHISPER_LANGUAGES,
                     )
                 ],
             )
@@ -132,4 +132,7 @@ async def main() -> None:
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

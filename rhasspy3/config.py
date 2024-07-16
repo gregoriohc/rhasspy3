@@ -14,30 +14,17 @@ class CommandConfig(DataClassJsonMixin):
 
 
 @dataclass
-class ProgramDownloadConfig(DataClassJsonMixin):
-    description: Optional[str] = None
-    check_file: Optional[str] = None
-
-
-@dataclass
-class ProgramInstallConfig(CommandConfig):
-    check_file: Optional[str] = None
-    download: Optional[CommandConfig] = None
-    downloads: Optional[Dict[str, ProgramDownloadConfig]] = None
-
-
-@dataclass
 class ProgramConfig(CommandConfig):
     adapter: Optional[str] = None
     template_args: Optional[Dict[str, Any]] = None
     installed: bool = True
-    install: Optional[ProgramInstallConfig] = None
 
 
 @dataclass
 class PipelineProgramConfig(DataClassJsonMixin):
     name: str
     template_args: Optional[Dict[str, Any]] = None
+    adapter_args: Optional[str] = None
     after: Optional[CommandConfig] = None
 
 
@@ -57,9 +44,11 @@ class PipelineConfig(DataClassJsonMixin):
 @dataclass
 class SatelliteConfig(DataClassJsonMixin):
     mic: Optional[PipelineProgramConfig] = None
+    mic_filter: Optional[PipelineProgramConfig] = None
     wake: Optional[PipelineProgramConfig] = None
     remote: Optional[PipelineProgramConfig] = None
     snd: Optional[PipelineProgramConfig] = None
+    vad: Optional[PipelineProgramConfig] = None
 
 
 @dataclass

@@ -1,36 +1,23 @@
 """Text to speech."""
 import wave
-from dataclasses import dataclass
-from typing import IO, AsyncIterable, Union
+from typing import IO, AsyncIterable, Optional, Union
+
+from wyoming.tts import Synthesize, SynthesizeVoice
 
 from .audio import AudioChunk, AudioStart, AudioStop
 from .config import PipelineProgramConfig
 from .core import Rhasspy
-from .event import Event, Eventable, async_read_event, async_write_event
+from .event import async_read_event, async_write_event
 from .program import create_process
 
 DOMAIN = "tts"
-_SYNTHESIZE_TYPE = "synthesize"
 
-
-@dataclass
-class Synthesize(Eventable):
-    """Request to synthesize audio from text."""
-
-    text: str
-    """Text to synthesize."""
-
-    @staticmethod
-    def is_type(event_type: str) -> bool:
-        return event_type == _SYNTHESIZE_TYPE
-
-    def event(self) -> Event:
-        return Event(type=_SYNTHESIZE_TYPE, data={"text": self.text})
-
-    @staticmethod
-    def from_event(event: Event) -> "Synthesize":
-        assert event.data is not None
-        return Synthesize(text=event.data["text"])
+__all__ = [
+    "Synthesize",
+    "SynthesizeVoice",
+    "DOMAIN",
+    "synthesize",
+]
 
 
 async def synthesize(
@@ -38,13 +25,26 @@ async def synthesize(
     program: Union[str, PipelineProgramConfig],
     text: str,
     wav_out: IO[bytes],
+    voice_name: Optional[str] = None,
+    voice_speaker: Optional[str] = None,
 ):
     """Synthesize audio from text to WAV output."""
     async with (await create_process(rhasspy, DOMAIN, program)) as tts_proc:
         assert tts_proc.stdin is not None
         assert tts_proc.stdout is not None
 
-        await async_write_event(Synthesize(text=text).event(), tts_proc.stdin)
+        await async_write_event(
+            Synthesize(
+                text=text,
+                voice=SynthesizeVoice(
+                    name=voice_name,
+                    speaker=voice_speaker,
+                )
+                if voice_name
+                else None,
+            ).event(),
+            tts_proc.stdin,
+        )
 
         wav_file: wave.Wave_write = wave.open(wav_out, "wb")
         wav_params_set = False

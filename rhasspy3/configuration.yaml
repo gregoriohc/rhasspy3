@@ -44,6 +44,11 @@ programs:
         host: 0.0.0.0
         port: 5000
 
+  mic_filter:
+    speexdsp-cli:
+      command: |
+        bin/speexdsp-cli --rate 16000 --samples 1024
+
   # -------------------
   # Wake word detection
   # -------------------
@@ -53,7 +58,7 @@ programs:
     # Models: see script/list_models
     porcupine1:
       command: |
-        .venv/bin/python3 bin/porcupine_stream.py --model "${model}"
+        script/stream --model "${model}"
       template_args:
         model: "porcupine_linux.ppn"
 
@@ -62,9 +67,7 @@ programs:
     # Custom wake word: https://github.com/rhasspy/snowboy-seasalt
     snowboy:
       command: |
-        .venv/bin/python3 bin/snowboy_raw_text.py --model "${model}"
-      adapter: |
-        wake_adapter_raw.py
+        script/stream --model "${model}"
       template_args:
         model: "share/snowboy.umdl"
 
@@ -72,11 +75,27 @@ programs:
     # Model included in share/
     precise-lite:
       command: |
-        .venv/bin/python3 bin/precise.py "${model}"
-      adapter: |
-        wake_adapter_raw.py
+        script/stream --model "${model}"
       template_args:
         model: "share/hey_mycroft.tflite"
+
+    # https://github.com/dscripka/openWakeWord
+    openwakeword:
+      command: |
+        script/stream --model "${model}"
+      template_args:
+        model: "hey_jarvis"
+
+    openwakeword-lite.client:
+      command: |
+        client_unix_socket.py var/run/openwakeword.socket
+
+    openwakeword-lite:
+      command: |
+        script/stream --model "${model}"
+      template_args:
+        model: "share/hey_rhasspy_v0.1.tflite"
+
 
     # TODO: snowman
     # https://github.com/Thalhammer/snowman/
@@ -246,23 +265,9 @@ programs:
     # Models: https://github.com/piper/piper/releases/tag/v0.0.2
     piper:
       command: |
-        bin/piper --model "${model}" --output_file -
-      adapter: |
-        tts_adapter_text2wav.py
+        script/events --voice "${voice}"
       template_args:
-        model: "${data_dir}/en-us-blizzard_lessac-medium.onnx"
-      install:
-        command: |
-          script/setup.py --destination '${program_dir}/bin'
-        check_file: "${program_dir}/bin/piper"
-        download:
-          command: |
-            script/download.py --destination '${data_dir}' '${model}'
-        downloads:
-          en-us_lessac:
-            description: "U.S. English voice"
-            check_file: "${data_dir}/en-us-blizzard_lessac-medium.onnx"
-
+        voice: "en_US-lessac-medium"
 
     # Run server: tts piper
     piper.client:
@@ -445,6 +450,15 @@ programs:
       template_args:
         device: "default"
 
+    # https://python-sounddevice.readthedocs.io
+    sounddevice:
+      command: |
+        script/events
+
+    sounddevice.client:
+      command: |
+        client_unix_socket.py var/run/sounddevice.socket
+
     udp_raw:
       command: |
         bin/udp_raw.py --host "${host}" --port ${port}
@@ -464,6 +478,12 @@ programs:
         script/run "${uri}"
       template_args:
         uri: "ws://localhost:13331/pipeline/asr-tts"
+
+    home_assistant:
+      command: |
+        script/stream --token "${token}" --server "${server}" --debug
+      template_args:
+        server: "localhost:8123"
 
 # -----------------------------------------------------------------------------
 
@@ -526,9 +546,9 @@ servers:
 
     piper:
       command: |
-        script/server "${model}"
+        script/server --voice "${voice}"
       template_args:
-        model: "${data_dir}/en-us-blizzard_lessac-medium.onnx"
+        voice: "en_US-lessac-medium"
 
     larynx:
       command: |
@@ -539,6 +559,27 @@ servers:
     coqui-tts:
       command: |
         script/server
+
+  wake:
+    porcupine1:
+      command: |
+        script/server --model "${model}"
+      template_args:
+        model: "porcupine_linux.ppn"
+
+    openwakeword-lite:
+      command: |
+        script/server --model "${model}"
+      template_args:
+        model: "hey_rhasspy"
+
+  snd:
+    sounddevice:
+      command: |
+        script/server --device "${device}"
+      template_args:
+        device: ""
+
 
 
 # -----------------------------------------------------------------------------

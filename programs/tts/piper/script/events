@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+_DIR = Path(__file__).parent
+_PROGRAM_DIR = _DIR.parent
+_BIN_DIR = _PROGRAM_DIR / "bin"
+_SERVER_DIR = _PROGRAM_DIR / "server"
+
+_CONFIG_DIR = _DIR.parent.parent.parent.parent
+_DATA_DIR = _CONFIG_DIR / "data" / "tts" / "piper"
+
+server_path = str(_SERVER_DIR.absolute())
+python_path = os.getenv("PYTHONPATH") or ""
+if python_path:
+    python_path = f"{python_path}{os.pathsep}{server_path}"
+else:
+    python_path = server_path
+
+os.putenv("PYTHONPATH", python_path)
+os.execvp(
+    "python3",
+    [
+        "python3",
+        "-m",
+        "wyoming_piper",
+        "--piper",
+        str((_BIN_DIR / "piper").absolute()),
+        "--data-dir",
+        str(_DATA_DIR.absolute()),
+        "--download-dir",
+        str(_DATA_DIR.absolute()),
+    ]
+    + sys.argv[1:],
+)

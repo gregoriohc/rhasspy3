@@ -1,63 +1,29 @@
 """Wake word detection"""
 import asyncio
 import logging
-from dataclasses import dataclass
-from typing import AsyncIterable, MutableSequence, Optional, Union
+import wave
+from collections import deque
+from typing import AsyncIterable, Deque, MutableSequence, Optional, Union
+
+from wyoming.wake import Detection, NotDetected
 
 from .audio import AudioChunk, AudioStart, AudioStop
 from .config import PipelineProgramConfig
 from .core import Rhasspy
-from .event import Event, Eventable, async_read_event, async_write_event
+from .event import Event, async_read_event, async_write_event
 from .program import create_process
 
 DOMAIN = "wake"
-_DETECTION_TYPE = "detection"
-_NOT_DETECTED_TYPE = "not-detected"
 
 _LOGGER = logging.getLogger(__name__)
 
-
-@dataclass
-class Detection(Eventable):
-    """Wake word was detected."""
-
-    name: Optional[str] = None
-    """Name of model."""
-
-    timestamp: Optional[int] = None
-    """Timestamp of audio chunk with detection"""
-
-    @staticmethod
-    def is_type(event_type: str) -> bool:
-        return event_type == _DETECTION_TYPE
-
-    def event(self) -> Event:
-        return Event(
-            type=_DETECTION_TYPE, data={"name": self.name, "timestamp": self.timestamp}
-        )
-
-    @staticmethod
-    def from_event(event: Event) -> "Detection":
-        assert event.data is not None
-        return Detection(
-            name=event.data.get("name"), timestamp=event.data.get("timestamp")
-        )
-
-
-@dataclass
-class NotDetected(Eventable):
-    """Audio stream ended before wake word was detected."""
-
-    @staticmethod
-    def is_type(event_type: str) -> bool:
-        return event_type == _NOT_DETECTED_TYPE
-
-    def event(self) -> Event:
-        return Event(type=_NOT_DETECTED_TYPE)
-
-    @staticmethod
-    def from_event(event: Event) -> "NotDetected":
-        return NotDetected()
+__all__ = [
+    "DOMAIN",
+    "Detection",
+    "NotDetected",
+    "detect",
+    "detect_stream",
+]
 
 
 async def detect(
@@ -65,9 +31,12 @@ async def detect(
     program: Union[str, PipelineProgramConfig],
     mic_in: asyncio.StreamReader,
     chunk_buffer: Optional[MutableSequence[Event]] = None,
+    save_wav_writer: Optional[wave.Wave_write] = None,
+    save_wav_chunks: int = 40,
 ) -> Optional[Detection]:
     """Try to detect wake word in an audio stream."""
     detection: Optional[Detection] = None
+    saved_chunks: Deque[Event] = deque(maxlen=save_wav_chunks)
     async with (await create_process(rhasspy, DOMAIN, program)) as wake_proc:
         assert wake_proc.stdin is not None
         assert wake_proc.stdout is not None
@@ -77,45 +46,68 @@ async def detect(
         pending = {mic_task, wake_task}
         is_first_chunk = True
 
-        while True:
-            done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
-            )
-            if mic_task in done:
-                mic_event = mic_task.result()
-                if mic_event is None:
-                    break
+        try:
+            while True:
+                done, pending = await asyncio.wait(
+                    pending, return_when=asyncio.FIRST_COMPLETED
+                )
+                if mic_task in done:
+                    mic_event = mic_task.result()
+                    if mic_event is None:
+                        break
 
-                if AudioChunk.is_type(mic_event.type):
-                    if is_first_chunk:
-                        is_first_chunk = False
-                        _LOGGER.debug("detect: processing audio")
+                    if AudioChunk.is_type(mic_event.type):
+                        if is_first_chunk:
+                            is_first_chunk = False
+                            _LOGGER.debug("detect: processing audio")
+
+                        if chunk_buffer is not None:
+                            # Buffer chunks for asr
+                            chunk_buffer.append(mic_event)
+
+                        if save_wav_writer is not None:
+                            saved_chunks.append(mic_event)
 
                     await async_write_event(mic_event, wake_proc.stdin)
-                    if chunk_buffer is not None:
-                        # Buffer chunks for asr
-                        chunk_buffer.append(mic_event)
 
-                if detection is None:
                     # Next chunk
                     mic_task = asyncio.create_task(async_read_event(mic_in))
                     pending.add(mic_task)
 
-            if detection is not None:
-                # Ensure last mic task is finished
-                break
+                if detection is not None:
+                    await async_write_event(AudioStop().event(), wake_proc.stdin)
 
-            if wake_task in done:
-                wake_event = wake_task.result()
-                if wake_event is None:
+                    if save_wav_writer is not None:
+                        save_wav_writer_set = False
+                        for chunk_event in saved_chunks:
+                            chunk = AudioChunk.from_event(chunk_event)
+                            if not save_wav_writer_set:
+                                # Configure WAV
+                                save_wav_writer.setframerate(chunk.rate)
+                                save_wav_writer.setsampwidth(chunk.width)
+                                save_wav_writer.setnchannels(chunk.channels)
+                                save_wav_writer_set = True
+
+                            save_wav_writer.writeframes(chunk.audio)
+
                     break
 
-                if Detection.is_type(wake_event.type):
-                    detection = Detection.from_event(wake_event)
-                else:
-                    # Next wake event
-                    wake_task = asyncio.create_task(async_read_event(wake_proc.stdout))
-                    pending.add(wake_task)
+                if wake_task in done:
+                    wake_event = wake_task.result()
+                    if wake_event is None:
+                        break
+
+                    if Detection.is_type(wake_event.type):
+                        detection = Detection.from_event(wake_event)
+                    else:
+                        # Next wake event
+                        wake_task = asyncio.create_task(
+                            async_read_event(wake_proc.stdout)
+                        )
+                        pending.add(wake_task)
+        finally:
+            for task in pending:
+                task.cancel()
 
     _LOGGER.debug("detect: %s", detection)
 
@@ -157,7 +149,9 @@ async def detect_stream(
             if audio_task in done:
                 chunk_bytes = audio_task.result()
                 if chunk_bytes:
-                    chunk = AudioChunk(rate, width, channels, chunk_bytes)
+                    chunk = AudioChunk(
+                        rate, width, channels, chunk_bytes, timestamp=timestamp
+                    )
                     await async_write_event(chunk.event(), wake_proc.stdin)
                     timestamp += chunk.milliseconds
 
